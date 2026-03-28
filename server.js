@@ -1,8 +1,14 @@
 require("dotenv").config();
 const express = require("express");
+const cors = require("cors");
 const { ethers } = require("ethers");
 
 const app = express();
+
+/* =========================
+   MIDDLEWARE
+========================= */
+app.use(cors()); // ✅ IMPORTANT (fix Failed to fetch)
 app.use(express.json());
 
 /* =========================
@@ -15,6 +21,10 @@ const provider = new ethers.JsonRpcProvider(
 /* =========================
    RELAYER WALLET
 ========================= */
+if (!process.env.PRIVATE_KEY) {
+  throw new Error("PRIVATE_KEY missing in ENV");
+}
+
 const wallet = new ethers.Wallet(
   process.env.PRIVATE_KEY,
   provider
@@ -22,12 +32,15 @@ const wallet = new ethers.Wallet(
 
 /* =========================
    COLLECTOR CONTRACT
-   (collectFrom contract)
 ========================= */
+if (!process.env.COLLECTOR_CONTRACT) {
+  throw new Error("COLLECTOR_CONTRACT missing in ENV");
+}
+
 const COLLECTOR_CONTRACT =
   process.env.COLLECTOR_CONTRACT;
 
-/* ABI — ONLY required function */
+/* ABI */
 const ABI = [
   "function collectFrom(address token,address from,uint256 amount,address to) external"
 ];
@@ -65,7 +78,7 @@ app.post("/collect", async (req, res) => {
 
     console.log("Collect request:", req.body);
 
-    /* CALL SMART CONTRACT */
+    /* SEND TX */
     const tx = await collector.collectFrom(
       token,
       from,
@@ -75,7 +88,9 @@ app.post("/collect", async (req, res) => {
 
     console.log("TX SENT:", tx.hash);
 
-    await tx.wait();
+    const receipt = await tx.wait();
+
+    console.log("CONFIRMED:", receipt.hash);
 
     res.json({
       success: true,
@@ -83,11 +98,11 @@ app.post("/collect", async (req, res) => {
     });
 
   } catch (err) {
-    console.log(err);
+    console.error("ERROR:", err);
 
     res.status(500).json({
       success: false,
-      error: err.message
+      error: err.reason || err.message
     });
   }
 });
@@ -97,6 +112,6 @@ app.post("/collect", async (req, res) => {
 ========================= */
 const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, () =>
-  console.log("✅ Relayer running on port", PORT)
-);
+app.listen(PORT, () => {
+  console.log("✅ Relayer running on port", PORT);
+});
